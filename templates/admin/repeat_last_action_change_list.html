@@ -1,0 +1,22 @@
+{# templates/admin/repeat_last_action_change_list.html #}
+{% extends "admin/change_list.html" %}
+
+{# Careful where to put our form so it does not result in a nested form #}
+{% block search %}
+    {% if last_action %}
+        <div class="col-12" id="repeat-action">
+            <form id="repeat-action-form" method="POST" action="{{ last_action.path }}">
+                {% csrf_token %}
+                {% for key, values in last_action.data %}
+                    {% if key != "csrfmiddlewaretoken" %}
+                        {% for value in values %}
+                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+                <button type="submit" class="btn btn-light float-left"><i class="fa fa-redo"></i> Repeat</button>
+            </form>
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}
