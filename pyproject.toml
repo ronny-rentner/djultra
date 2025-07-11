@@ -1,0 +1,24 @@
+[build-system]
+#requires = ["build_meta_plus @ file:///home/ronny/Projects/py/build_meta_plus"]
+#build-backend = "build_meta_plus.build_meta_plus"
+
+requires = ["setuptools", "setuptools-scm", "wheel", "cython"]
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = "djultra"
+version = "0.0.1"
+description = "Django Ultra"
+authors = [{ name = "Ronny Rentner", email = "djultra.code@ronny-rentner.de" }]
+readme = "readme.md"
+license = { text = "MIT" }
+
+#[tool.setuptools]
+#script-files = ["smartactivate", "get-project-name.sh"]
+
+#[tool.build_meta_plus]
+#pre-build = ["echo '[smartactivate] pre build step'"]
+
+#Cleanup
+#post-build = ["rm -rf smartactivate.egg-info"]
+
