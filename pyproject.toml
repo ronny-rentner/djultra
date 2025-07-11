@@ -12,6 +12,16 @@ description = "Django Ultra"
 authors = [{ name = "Ronny Rentner", email = "djultra.code@ronny-rentner.de" }]
 readme = "readme.md"
 license = { text = "MIT" }
+dependencies= [
+    'rich',
+]
+
+[tool.setuptools]
+# FIXME: Does not work, the files are still included
+include-package-data = false
+packages = ["djultra"]
+[tool.setuptools.package-dir]
+djultra = "." 
 
 #[tool.setuptools]
 #script-files = ["smartactivate", "get-project-name.sh"]
