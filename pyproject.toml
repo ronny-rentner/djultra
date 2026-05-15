@@ -2,7 +2,7 @@
 #requires = ["build_meta_plus @ file:///home/ronny/Projects/py/build_meta_plus"]
 #build-backend = "build_meta_plus.build_meta_plus"
 
-requires = ["setuptools", "setuptools-scm", "wheel", "cython"]
+requires = ["setuptools", "wheel"]
 build-backend = 'setuptools.build_meta'
 
 [project]
@@ -13,15 +13,32 @@ authors = [{ name = "Ronny Rentner", email = "djultra.code@ronny-rentner.de" }]
 readme = "readme.md"
 license = { text = "MIT" }
 dependencies= [
+    'Django',
+    'djangorestframework',
+    'django-countries',
+    'django-csp',
+    'django-tasks[database]',
+    'requests',
     'rich',
+    'setproctitle',
 ]
 
 [tool.setuptools]
-# FIXME: Does not work, the files are still included
 include-package-data = false
-packages = ["djultra"]
+packages = [
+    "djultra",
+    "djultra.admin",
+    "djultra.management",
+    "djultra.management.commands",
+    "djultra.migrations",
+    "djultra.utils",
+]
+
 [tool.setuptools.package-dir]
-djultra = "." 
+djultra = "src" 
+
+[tool.setuptools.package-data]
+djultra = ["templates/admin/*.html"]
 
 #[tool.setuptools]
 #script-files = ["smartactivate", "get-project-name.sh"]
@@ -31,4 +48,3 @@ djultra = "."
 
 #Cleanup
 #post-build = ["rm -rf smartactivate.egg-info"]
-

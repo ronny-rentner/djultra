@@ -1,3 +1,4 @@
+import re
 
 #############
 ## LOGGING ##
@@ -42,7 +43,8 @@ LOGGING = {
     # Parent root logger (in case no more specific logger is defined)
     'root': {
         'handlers': ['console'],
-        'level': 'INFO',
+        #'level': 'INFO',
+        'level': 'DEBUG',
     },
 
     "formatters": {
@@ -220,4 +222,24 @@ CONTENT_SECURITY_POLICY = {
         "base-uri": [ SELF, ],
     },
 }
+
+
+
+##############
+## DEV MODE ##
+##############
+
+# Fastmanage daemon
+
+# DJU_DEV_FASTMANAGE_ENABLE = True
+
+# When set to None, create socket in BASE_DIR
+# DJU_DEV_FASTMANAGE_DAEMON_SOCKET = None
+
+
+# Django tasks DB worker
+
+# DJU_DEV_DB_WORKER_ENABLE = True
+
+
 

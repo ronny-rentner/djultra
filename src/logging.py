@@ -1,14 +1,15 @@
 import os
 import shutil
 import sys
+import types
 from datetime import datetime
 
 from rich.console import Console
 from rich.highlighter import Highlighter, RegexHighlighter
 from rich.logging import RichHandler
+from rich.pretty import pretty_repr
 from rich.table import Table
 from rich.text import Text
-from rich.pretty import pretty_repr
 
 from .middleware import RequestIDMiddleware
 
@@ -72,6 +73,9 @@ class CustomRichHandler(RichHandler):
         self._time_column_width = 8
 
 
+    def is_lambda(self, f):
+        return isinstance(f, types.FunctionType) and f.__name__ == "<lambda>"
+
     def get_terminal_width(self):
         default_columns = int(os.getenv('DEFAULT_TERMINAL_COLUMNS', 80))  # Set a default or use environment variable
         try:
@@ -95,21 +99,22 @@ class CustomRichHandler(RichHandler):
         else:
             record.relativeCreated = 0
 
-        #print((not isinstance(record.msg, str)), ('%' not in record.msg), isinstance(record.args, tuple))
-        #if ((not isinstance(record.msg, str)) or ('%' not in record.msg)) and isinstance(record.args, tuple):
-
-        #Why does it have to be a tuple?
         if ((not isinstance(record.msg, str)) or ('%' not in record.msg)): # and isinstance(record.args, tuple):
+            # If record.args is a tuple (like from write(msg, func))
             if isinstance(record.args, tuple):
-                # TODO: Why are lists wrapped in a tuple?
-                if len(record.args) == 1 and isinstance(record.args[0], list):
-                    record.msg = f'{record.msg}{pretty(record.args[0])}'
+                # Filter out any functions/lambdas
+                filtered_args = [a for a in record.args if not self.is_lambda(a)]
+                
+                # Handle empty message
+                if not filtered_args:
+                    record.msg = str(record.msg)
+                elif len(filtered_args) == 1 and isinstance(filtered_args[0], list):
+                    record.msg = f'{record.msg}{pretty(filtered_args[0])}'
                 else:
-                    record.msg = str(record.msg) + ' '.join(map(str, record.args))
+                    record.msg = str(record.msg) + ' '.join(map(str, filtered_args))
+                record.args = ()
             else:
-                #record.msg = f'{record.msg} {pretty(record.args, expand_all=True)}'
                 record.msg = f'{record.msg} {pretty(record.args)}'
-            #record.msg = f'{record.msg} {pretty(record.args, expand_all=True)}'
             record.args = ()  # Clear args to avoid further formatting issues
 
         super().emit(record)
