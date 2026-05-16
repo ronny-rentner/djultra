@@ -87,14 +87,18 @@ class Command(RunserverCommand):
             worker_pid = os.fork()
             if worker_pid == 0:
                 os.setsid()
-                setproctitle.setproctitle("django-taks-db-worker")
+                setproctitle.setproctitle("django-tasks-db-worker")
                 self._run_worker()
                 os._exit(0)
             self.child_pids["worker"] = worker_pid
 
         # Launch local dev server
         try:
-            logger.info(f"Starting Django dev server (worker_pid={worker_pid}, daemon_pid={self.child_pids.get('daemon')})")
+            logger.info(
+                "Starting Django dev server "
+                f"(worker_pid={self.child_pids.get('worker', 'skipped')}, "
+                f"daemon_pid={self.child_pids.get('daemon', 'skipped')})"
+            )
             setproctitle.setproctitle("django-dev-server")
             super().handle(*args, **options)
         finally:

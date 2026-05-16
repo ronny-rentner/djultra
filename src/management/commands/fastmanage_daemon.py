@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import signal
+import shlex
 import socket
 import sys
 import time
@@ -50,7 +51,7 @@ class FastmanageDaemon:
         if not cmd_line:
             logger.error("empty command line")
             return None
-        argv = cmd_line.split()
+        argv = shlex.split(cmd_line)
         fds = []
         for lvl, typ, data in anc:
             if (lvl, typ) == (socket.SOL_SOCKET, socket.SCM_RIGHTS):
@@ -120,6 +121,13 @@ class FastmanageDaemon:
             mgmt.ManagementUtility().execute(use_socket=False)
         except SystemExit:
             pass
+        # The child process returns to start() and then exits with os._exit().
+        # That is intentional because a normal Python shutdown would run inherited
+        # daemon atexit handlers in the worker process. os._exit() also skips
+        # Python's implicit stream flushing, so flush command output before
+        # closing the completion socket.
+        sys.stdout.flush()
+        sys.stderr.flush()
         conn.close()
 
     def shutdown(self, *_):

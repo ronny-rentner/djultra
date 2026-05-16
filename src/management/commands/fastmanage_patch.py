@@ -9,6 +9,7 @@ import socket
 import array
 import time
 import json
+import shlex
 from pathlib import Path
 
 import django.core.management as mgmt
@@ -53,7 +54,7 @@ class SocketManagementUtility(mgmt.ManagementUtility):
 
         # Serialize environment and command
         env_json = json.dumps(dict(os.environ)).encode()
-        cmd = (" ".join(self.argv) + "\n").encode()
+        cmd = (shlex.join(self.argv) + "\n").encode()
         payload = env_json + b"\n" + cmd
 
         #dbg(f"Client payload: {payload}")
