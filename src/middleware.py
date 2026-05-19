@@ -196,9 +196,33 @@ class PatchMorselMiddleware:
     """ Patches Python's built-in Cookie Morsel to allow partioned cookies and
         set all cookies as partitioned by default
     """
+    partitioned_cookie_settings = {
+        "SESSION_COOKIE_SECURE": True,
+        "SESSION_COOKIE_SAMESITE": "None",
+        "CSRF_COOKIE_SECURE": True,
+        "CSRF_COOKIE_SAMESITE": "None",
+    }
+
     def __init__(self, get_response):
         self.get_response = get_response
+        self.configure_cookie_settings()
         self.patch_morsel()
+
+    def configure_cookie_settings(self):
+        configured_settings = settings._wrapped
+
+        for setting_name, required_value in self.partitioned_cookie_settings.items():
+            current_value = getattr(settings, setting_name)
+
+            if configured_settings.is_overridden(setting_name) and current_value != required_value:
+                logger.warning(
+                    "PatchMorselMiddleware requires %s=%r for partitioned cookies; overriding configured value %r.",
+                    setting_name,
+                    required_value,
+                    current_value,
+                )
+
+            setattr(settings, setting_name, required_value)
 
     def patch_morsel(self):
         # Define a patched Morsel class that includes the Partitioned attribute by default

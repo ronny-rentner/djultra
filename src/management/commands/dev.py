@@ -54,7 +54,6 @@ class Command(RunserverCommand):
 
         setproctitle.setproctitle("django-main")
 
-        # Redirect command output to logger
         self.stdout.write = logger.info
         self.stderr.write = logger.error
 
@@ -67,7 +66,6 @@ class Command(RunserverCommand):
 
         self.child_pids = {}
 
-        # Launch fastmanage daemon
         daemon_enabled = getattr(settings, fastmanage_daemon.CONF_ENABLE, True)
         if daemon_enabled:
             connections.close_all()
@@ -80,7 +78,6 @@ class Command(RunserverCommand):
                 os._exit(0)
             self.child_pids["daemon"] = daemon_pid
 
-        # Launch db_worker process
         db_worker_enabled = getattr(settings, "DJU_DEV_DB_WORKER_ENABLE", True)
         if db_worker_enabled:
             connections.close_all()
@@ -92,7 +89,6 @@ class Command(RunserverCommand):
                 os._exit(0)
             self.child_pids["worker"] = worker_pid
 
-        # Launch local dev server
         try:
             logger.info(
                 "Starting Django dev server "

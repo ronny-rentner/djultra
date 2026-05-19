@@ -22,7 +22,6 @@ def dbg(msg):
 class SocketManagementUtility(mgmt.ManagementUtility):
     def __init__(self, argv=None):
         super().__init__(argv)
-        # Use project or current working dir for socket path
         self.base_dir = Path.cwd()
         self.sock_path = self.base_dir / "fastmanage.sock"
 
@@ -62,10 +61,20 @@ class SocketManagementUtility(mgmt.ManagementUtility):
         anc = [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [0, 1, 2]).tobytes())]
         cli.sendmsg([payload], anc)
 
-        # Wait for socket close (which signals completion)
-        while cli.recv(4096):
-            pass
+        status_raw = b""
+        while True:
+            chunk = cli.recv(4096)
+            if not chunk:
+                break
+            status_raw += chunk
         cli.close()
+        if status_raw:
+            try:
+                status = int(status_raw.strip())
+            except ValueError as exc:
+                raise SystemExit(f"fastmanage: invalid exit status payload {status_raw!r}") from exc
+            if status:
+                raise SystemExit(status)
 
 # Patch Django globally
 mgmt.ManagementUtility = SocketManagementUtility

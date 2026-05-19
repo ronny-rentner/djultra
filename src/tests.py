@@ -1,138 +1,229 @@
 import array
-import importlib
+import io
+import http.cookies
 import json
-import os
 import shlex
-import socket
-import sys
 import tempfile
+from pathlib import Path
 from unittest import TestCase, mock
 
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from django.test import override_settings
+
 from .management.commands import fastmanage_daemon
+from .middleware import PatchMorselMiddleware
 
 
-def close_fds(fds):
-    for fd in fds:
-        os.close(fd)
+class RecvmsgConnection:
+    def __init__(self, msg, ancillary=()):
+        self.msg = msg
+        self.ancillary = ancillary
+
+    def recvmsg(self, size, ancillary_size):
+        return self.msg, list(self.ancillary), 0, None
 
 
-def read_fd(fd):
-    chunks = []
-    while True:
-        chunk = os.read(fd, 4096)
-        if not chunk:
-            return b"".join(chunks)
-        chunks.append(chunk)
+class RecordingConnection:
+    def __init__(self):
+        self.payloads = []
+        self.closed = False
+
+    def sendall(self, payload):
+        self.payloads.append(payload)
+
+    def close(self):
+        self.closed = True
 
 
-class FastmanageProtocolTests(TestCase):
-    def test_parse_request_preserves_quoted_argv_and_stdio_fds(self):
-        client, daemon = socket.socketpair()
-        stdin_read, stdin_write = os.pipe()
-        stdout_read, stdout_write = os.pipe()
-        stderr_read, stderr_write = os.pipe()
-        sent_fds = [stdin_read, stdout_write, stderr_write]
-        received_fds = []
+class FlushRecorder(io.StringIO):
+    def __init__(self):
+        super().__init__()
+        self.flushed = False
 
-        try:
-            env = {"PWD": os.getcwd(), "FASTMANAGE_TEST": "quoted argv"}
-            argv = ["manage.py", "shell", "-c", "print('fastmanage ok')"]
-            payload = json.dumps(env).encode() + b"\n" + (shlex.join(argv) + "\n").encode()
-            ancillary = [
-                (
-                    socket.SOL_SOCKET,
-                    socket.SCM_RIGHTS,
-                    array.array("i", sent_fds).tobytes(),
-                )
-            ]
+    def flush(self):
+        self.flushed = True
+        super().flush()
 
-            client.sendmsg([payload], ancillary)
-            daemon_instance = object.__new__(fastmanage_daemon.FastmanageDaemon)
-            parsed_env, parsed_argv, received_fds = daemon_instance.parse_request(daemon)
 
-            self.assertEqual(parsed_env["FASTMANAGE_TEST"], "quoted argv")
-            self.assertEqual(parsed_argv, argv)
-            self.assertEqual(len(received_fds), 3)
-        finally:
-            client.close()
-            daemon.close()
-            close_fds([stdin_read, stdin_write, stdout_read, stdout_write, stderr_read, stderr_write])
-            close_fds(received_fds)
+def fastmanage_payload(env, argv):
+    return json.dumps(env).encode() + b"\n" + (shlex.join(argv) + "\n").encode()
 
-    def test_worker_writes_to_passed_stdout_and_stderr_without_status_payload(self):
-        class OutputManagementUtility:
+
+def fd_ancillary(*fds):
+    return [
+        (
+            fastmanage_daemon.socket.SOL_SOCKET,
+            fastmanage_daemon.socket.SCM_RIGHTS,
+            array.array("i", fds).tobytes(),
+        )
+    ]
+
+
+class FastmanageDaemonFunctionTests(TestCase):
+    def parse_request(self, msg, ancillary=()):
+        return object.__new__(fastmanage_daemon.FastmanageDaemon).parse_request(
+            RecvmsgConnection(msg, ancillary)
+        )
+
+    def assert_parse_request_logs_error(self, msg, ancillary=()):
+        with self.assertLogs(fastmanage_daemon.__name__, level="ERROR"):
+            self.assertIsNone(self.parse_request(msg, ancillary))
+
+    def run_worker_with_system_exit(self, code):
+        calls = []
+
+        class ExitManagementUtility:
             def execute(self, *args, **kwargs):
-                print("fastmanage stdout")
-                print("fastmanage stderr", file=sys.stderr)
-                raise SystemExit(23)
+                calls.append((args, kwargs))
+                raise SystemExit(code)
 
-        parent_conn, child_conn = socket.socketpair()
-        stdin_read, stdin_write = os.pipe()
-        stdout_read, stdout_write = os.pipe()
-        stderr_read, stderr_write = os.pipe()
-
-        pid = os.fork()
-        if pid == 0:
-            try:
-                parent_conn.close()
-                close_fds([stdin_write, stdout_read, stderr_read])
-                daemon_instance = object.__new__(fastmanage_daemon.FastmanageDaemon)
-                with mock.patch.object(fastmanage_daemon.mgmt, "ManagementUtility", OutputManagementUtility):
-                    daemon_instance.run_worker(
-                        child_conn,
-                        {"PWD": os.getcwd()},
-                        ["manage.py", "fake"],
-                        [stdin_read, stdout_write, stderr_write],
-                    )
-                os._exit(0)
-            except BaseException as exc:
-                os.write(2, f"fastmanage child test failed: {exc}\n".encode())
-                os._exit(99)
-
-        child_conn.close()
-        close_fds([stdin_read, stdout_write, stderr_write])
+        conn = RecordingConnection()
+        stdout = FlushRecorder()
+        stderr = FlushRecorder()
+        original_argv = fastmanage_daemon.sys.argv
 
         try:
-            socket_payload = parent_conn.recv(4096)
-            _, status = os.waitpid(pid, 0)
-            stdout_output = read_fd(stdout_read).decode()
-            stderr_output = read_fd(stderr_read).decode()
+            with mock.patch.object(fastmanage_daemon.mgmt, "ManagementUtility", ExitManagementUtility):
+                with mock.patch.object(fastmanage_daemon.os, "dup2") as dup2:
+                    with mock.patch.object(fastmanage_daemon.os, "close") as close:
+                        with mock.patch.object(fastmanage_daemon.sys, "stdout", stdout):
+                            with mock.patch.object(fastmanage_daemon.sys, "stderr", stderr):
+                                with mock.patch.dict(fastmanage_daemon.os.environ, {}, clear=False):
+                                    object.__new__(fastmanage_daemon.FastmanageDaemon).run_worker(
+                                        conn,
+                                        {},
+                                        ["manage.py", "fake"],
+                                        [101, 102, 103],
+                                    )
         finally:
-            parent_conn.close()
-            close_fds([stdin_write, stdout_read, stderr_read])
+            fastmanage_daemon.sys.argv = original_argv
 
-        self.assertEqual(socket_payload, b"")
-        self.assertEqual(stdout_output, "fastmanage stdout\n")
-        self.assertEqual(stderr_output, "fastmanage stderr\n")
-        self.assertTrue(os.WIFEXITED(status))
-        self.assertEqual(os.WEXITSTATUS(status), 0)
+        return conn, stdout, stderr, dup2, close, calls
 
-    def test_missing_socket_falls_back_to_django_management_utility(self):
-        import django.core.management as django_management
-
-        module_name = "djultra.management.commands.fastmanage_patch"
-        module_was_loaded = module_name in sys.modules
-        management_utility_before_import = django_management.ManagementUtility
-        fastmanage_patch = importlib.import_module(module_name)
-        self.addCleanup(setattr, django_management, "ManagementUtility", management_utility_before_import)
-        if not module_was_loaded:
-            self.addCleanup(sys.modules.pop, module_name, None)
-
-        fallback_calls = []
-        django_management_utility = fastmanage_patch.SocketManagementUtility.__mro__[1]
-
-        def execute_without_socket(utility, *args, **kwargs):
-            fallback_calls.append((utility.argv, args, kwargs))
-            return "fallback-result"
-
+    def test_daemon_uses_default_socket_path_when_socket_setting_is_omitted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(temp_dir)
-                with mock.patch.object(django_management_utility, "execute", execute_without_socket):
-                    result = fastmanage_patch.SocketManagementUtility(["manage.py", "check"]).execute()
-            finally:
-                os.chdir(original_cwd)
+            with override_settings():
+                daemon = fastmanage_daemon.FastmanageDaemon(base_dir=temp_dir)
 
-        self.assertEqual(result, "fallback-result")
-        self.assertEqual(fallback_calls, [(["manage.py", "check"], (), {})])
+        self.assertEqual(daemon.sock_path, Path(temp_dir) / "fastmanage.sock")
+
+    def test_daemon_rejects_explicit_none_socket_setting(self):
+        with override_settings(DJU_DEV_FASTMANAGE_DAEMON_SOCKET=None):
+            with self.assertRaises(ImproperlyConfigured):
+                fastmanage_daemon.FastmanageDaemon()
+
+    def test_daemon_uses_explicit_socket_path_setting(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            socket_path = Path(temp_dir) / "custom-fastmanage.sock"
+            with override_settings(DJU_DEV_FASTMANAGE_DAEMON_SOCKET=str(socket_path)):
+                daemon = fastmanage_daemon.FastmanageDaemon()
+
+        self.assertEqual(daemon.sock_path, socket_path)
+
+    def test_parse_request_preserves_quoted_argv_and_stdio_fds(self):
+        env = {"PWD": "/tmp/project", "FASTMANAGE_TEST": "quoted argv"}
+        argv = ["manage.py", "shell", "-c", "print('fastmanage ok')"]
+
+        parsed_env, parsed_argv, fds = self.parse_request(
+            fastmanage_payload(env, argv),
+            fd_ancillary(10, 11, 12),
+        )
+
+        self.assertEqual(parsed_env, env)
+        self.assertEqual(parsed_argv, argv)
+        self.assertEqual(fds, [10, 11, 12])
+
+    def test_parse_request_rejects_worker_requests(self):
+        result = self.parse_request(
+            fastmanage_payload({fastmanage_daemon.ENV_WORKER: "1"}, ["manage.py", "check"]),
+            fd_ancillary(10, 11, 12),
+        )
+
+        self.assertIsNone(result)
+
+    def test_parse_request_rejects_missing_separator(self):
+        self.assert_parse_request_logs_error(b'{"PWD": "/tmp/project"}', fd_ancillary(10, 11, 12))
+
+    def test_parse_request_rejects_invalid_json(self):
+        self.assert_parse_request_logs_error(b"{invalid json}\nmanage.py check\n", fd_ancillary(10, 11, 12))
+
+    def test_parse_request_rejects_empty_command(self):
+        self.assert_parse_request_logs_error(json.dumps({}).encode() + b"\n", fd_ancillary(10, 11, 12))
+
+    def test_parse_request_rejects_missing_stdio_fds(self):
+        self.assert_parse_request_logs_error(fastmanage_payload({}, ["manage.py", "check"]))
+
+    def test_run_worker_sends_integer_system_exit_status(self):
+        conn, stdout, stderr, dup2, close, calls = self.run_worker_with_system_exit(23)
+
+        self.assertEqual(conn.payloads, [b"23\n"])
+        self.assertTrue(conn.closed)
+        self.assertTrue(stdout.flushed)
+        self.assertTrue(stderr.flushed)
+        dup2.assert_has_calls([mock.call(101, 0), mock.call(102, 1), mock.call(103, 2)])
+        close.assert_has_calls([mock.call(101), mock.call(102), mock.call(103)])
+        self.assertEqual(calls, [((), {"use_socket": False})])
+
+    def test_run_worker_sends_zero_for_system_exit_none(self):
+        conn, stdout, stderr, dup2, close, calls = self.run_worker_with_system_exit(None)
+
+        self.assertEqual(conn.payloads, [b"0\n"])
+        self.assertTrue(conn.closed)
+        self.assertTrue(stdout.flushed)
+        self.assertTrue(stderr.flushed)
+        dup2.assert_has_calls([mock.call(101, 0), mock.call(102, 1), mock.call(103, 2)])
+        close.assert_has_calls([mock.call(101), mock.call(102), mock.call(103)])
+        self.assertEqual(calls, [((), {"use_socket": False})])
+
+    def test_run_worker_prints_string_system_exit_and_sends_status_one(self):
+        conn, stdout, stderr, dup2, close, calls = self.run_worker_with_system_exit("command failed")
+
+        self.assertEqual(conn.payloads, [b"1\n"])
+        self.assertEqual(stderr.getvalue(), "command failed\n")
+        self.assertTrue(conn.closed)
+        self.assertTrue(stdout.flushed)
+        self.assertTrue(stderr.flushed)
+        dup2.assert_has_calls([mock.call(101, 0), mock.call(102, 1), mock.call(103, 2)])
+        close.assert_has_calls([mock.call(101), mock.call(102), mock.call(103)])
+        self.assertEqual(calls, [((), {"use_socket": False})])
+
+
+class PatchMorselMiddlewareTests(TestCase):
+    def test_forces_cookie_settings_without_warning_for_django_defaults(self):
+        with override_settings():
+            with mock.patch("djultra.middleware.logger.warning") as warning:
+                PatchMorselMiddleware(lambda request: None)
+
+            self.assertEqual(settings.SESSION_COOKIE_SECURE, True)
+            self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "None")
+            self.assertEqual(settings.CSRF_COOKIE_SECURE, True)
+            self.assertEqual(settings.CSRF_COOKIE_SAMESITE, "None")
+            warning.assert_not_called()
+
+    def test_warns_before_overriding_conflicting_cookie_settings(self):
+        with override_settings(
+            SESSION_COOKIE_SECURE=False,
+            SESSION_COOKIE_SAMESITE="Lax",
+            CSRF_COOKIE_SECURE=False,
+            CSRF_COOKIE_SAMESITE="Lax",
+        ):
+            with self.assertLogs("djultra.middleware", level="WARNING") as logs:
+                PatchMorselMiddleware(lambda request: None)
+
+            self.assertEqual(settings.SESSION_COOKIE_SECURE, True)
+            self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "None")
+            self.assertEqual(settings.CSRF_COOKIE_SECURE, True)
+            self.assertEqual(settings.CSRF_COOKIE_SAMESITE, "None")
+            self.assertEqual(len(logs.output), 4)
+            self.assertIn("SESSION_COOKIE_SECURE=True", logs.output[0])
+            self.assertIn("overriding configured value False", logs.output[0])
+
+    def test_patch_morsel_sets_partitioned_on_new_cookies(self):
+        with override_settings():
+            PatchMorselMiddleware(lambda request: None)
+
+            cookie = http.cookies.SimpleCookie()
+            cookie["csrftoken"] = "token"
+
+            self.assertIn("Partitioned", cookie["csrftoken"].OutputString())

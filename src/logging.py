@@ -100,12 +100,9 @@ class CustomRichHandler(RichHandler):
             record.relativeCreated = 0
 
         if ((not isinstance(record.msg, str)) or ('%' not in record.msg)): # and isinstance(record.args, tuple):
-            # If record.args is a tuple (like from write(msg, func))
             if isinstance(record.args, tuple):
-                # Filter out any functions/lambdas
                 filtered_args = [a for a in record.args if not self.is_lambda(a)]
                 
-                # Handle empty message
                 if not filtered_args:
                     record.msg = str(record.msg)
                 elif len(filtered_args) == 1 and isinstance(filtered_args[0], list):

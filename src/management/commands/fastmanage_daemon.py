@@ -12,6 +12,7 @@ from pathlib import Path
 
 import django.core.management as mgmt
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,12 @@ CONF_ENABLE        = f"{ENV_PREFIX}_ENABLE"
 
 class FastmanageDaemon:
     def __init__(self, sock_path=None, base_dir=None):
-        sock_path = sock_path or getattr(settings, ENV_DAEMON_SOCKET, None)
+        if sock_path is None and settings._wrapped.is_overridden(ENV_DAEMON_SOCKET):
+            sock_path = getattr(settings, ENV_DAEMON_SOCKET)
+            if sock_path is None:
+                raise ImproperlyConfigured(f"{ENV_DAEMON_SOCKET} must be omitted or set to a filesystem path.")
         self.base_dir = Path(base_dir or os.getcwd())
-        self.sock_path = Path(sock_path or self.base_dir / "fastmanage.sock")
+        self.sock_path = Path(sock_path) if sock_path is not None else self.base_dir / "fastmanage.sock"
         self.server_socket = None
         self.worker_started = {}
         self.original_mgmt = mgmt.ManagementUtility
@@ -117,17 +121,21 @@ class FastmanageDaemon:
             os.close(fd)
 
         sys.argv = argv
+        status = 0
         try:
             mgmt.ManagementUtility().execute(use_socket=False)
-        except SystemExit:
-            pass
-        # The child process returns to start() and then exits with os._exit().
-        # That is intentional because a normal Python shutdown would run inherited
-        # daemon atexit handlers in the worker process. os._exit() also skips
-        # Python's implicit stream flushing, so flush command output before
-        # closing the completion socket.
+        except SystemExit as exc:
+            if exc.code is None:
+                status = 0
+            elif isinstance(exc.code, int):
+                status = exc.code
+            else:
+                print(exc.code, file=sys.stderr)
+                status = 1
+        # The worker child exits through os._exit(), so Python will not flush these streams for us.
         sys.stdout.flush()
         sys.stderr.flush()
+        conn.sendall(f"{status}\n".encode())
         conn.close()
 
     def shutdown(self, *_):
