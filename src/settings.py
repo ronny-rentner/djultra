@@ -1,3 +1,10 @@
+# Injected into the including project's settings via ultraimport
+# (inject=globals()), so it runs with that module's namespace: it expects
+# DEBUG, LOG_LEVEL, BASE_DIR, FRONTEND_URL and `config` to be defined
+# before the injection, and it wraps the project's MIDDLEWARE list with
+# djultra middleware. Project-specific overrides of anything defined here
+# belong below the injection loop in the project's settings.
+
 import re
 
 #############
@@ -81,14 +88,100 @@ MIDDLEWARE = [
 
     *MIDDLEWARE,
 
+    # Self-heals lagging postgres id sequences on duplicate-pkey errors and
+    # retries; innermost, so the retried response still passes through the
+    # response phase of all other middleware
+    'djultra.middleware.AdjustSequenceMiddleware',
+
     'djultra.middleware.AdminActionLoggerMiddleware', # Run after SessionMiddleware
 
     # Logs slow queries and number of queries (so far only usefull in dev env).
     'djultra.middleware.QueryLoggingMiddleware',
 
     # Test slow API responses
-    #'Relonee.core.middleware.ArtificialDelayMiddleware', 
+    #'djultra.middleware.ArtificialDelayMiddleware',
 ]
+
+##############
+## REST API ##
+##############
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 100,
+}
+
+#TODO: debug is not necessarily dev environment
+# Adjust renderers based on the environment
+if not DEBUG:
+    REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = (
+        'rest_framework.renderers.JSONRenderer',
+    )
+else:
+    REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = (
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    )
+
+########################
+## SESSIONS & SECURITY ##
+########################
+
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = 'None'
+
+CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=[FRONTEND_URL])
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+##################
+## CORS HEADERS ##
+##################
+
+# Alternatively, specify allowed origins
+CORS_ALLOWED_ORIGINS = []
+
+CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+
+# Allow specific HTTP methods
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+# Allow specific headers
+CORS_ALLOW_HEADERS = [
+    "auth",
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "cookie",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+# Allow credentials (cookies, authorization headers)
+CORS_ALLOW_CREDENTIALS = True
 
 ###################
 ## STATIC ASSETS ##
@@ -96,6 +189,8 @@ MIDDLEWARE = [
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
+
+DJANGO_VITE_DEV_MODE = DEBUG
 
 STATIC_URL = '/static/'
 
@@ -185,7 +280,6 @@ CONTENT_SECURITY_POLICY = {
             SELF,
             FRONTEND_URL,
             CSP_EXTRA_HOST,
-            "https://sign.relonee.com",
             UNSAFE_INLINE,
         ],
         "frame-src": [
@@ -193,7 +287,6 @@ CONTENT_SECURITY_POLICY = {
             FRONTEND_URL,
             CSP_EXTRA_HOST,
             "https://www.recaptcha.net",
-            "https://sign.relonee.com",
             'blob:',
         ],
         "img-src": [
@@ -208,9 +301,6 @@ CONTENT_SECURITY_POLICY = {
             #TODO: Needed only for vite on dev
             re.sub(r'^https?', 'ws', FRONTEND_URL),
             FRONTEND_URL,
-            "http://localhost:3000",
-            "https://localhost:3000",
-            #"https://sign.relonee.com",
             "https://www.recaptcha.net",
         ],
         "worker-src": [
