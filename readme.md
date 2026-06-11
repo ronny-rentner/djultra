@@ -57,7 +57,99 @@ Adding meta options to Django models:
 - `djultra.settings`: Rich logging, static/media paths, Django Vite paths, CSP defaults, middleware insertion, and dev flags.
 - `dev` management command: improved development server with local task and fastmanage workers.
 - Fastmanage: optional socket-backed acceleration for repeated `manage.py` / `django-admin` invocations.
-- `ConfigLoader`: reads environment variables first, then an optional config file, with type casting from defaults.
+- `ConfigLoader`: resolves a value from an optional namespace (`if_not_in_ns`), then environment variables, then an optional config file, with type casting derived from the default.
+
+## Settings Injection
+
+A project loads `djultra.settings` (and the settings of any other ultra app)
+into its own `settings.py` via ultraimport, which executes the fragment
+inside the project's namespace:
+
+```python
+for app in INSTALLED_ULTRA_APPS:
+    path = ultraimport.search_module_path(app)
+    settings_file_path = f"{path}/settings.py"
+    if os.path.exists(settings_file_path):
+        ultraimport(settings_file_path, '*', inject=globals(), add_to_ns=True)
+```
+
+The fragment expects the project to define `BASE_DIR` and `MIDDLEWARE`
+before the injection (it raises `ImproperlyConfigured` otherwise) and wraps
+the project's `MIDDLEWARE` list with djultra middleware. Everything else
+fills gaps only — each value resolves in this order:
+
+1. an assignment the project already made (`if_not_in_ns=globals()`)
+2. an environment variable of the same name
+3. the `[DEFAULT]` section of the config file (`CONFIG_FILE`)
+4. the built-in default
+
+Defaults aim at the local dev environment; the live production site is the
+special case and overrides via environment variables or the config file.
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `DEBUG` | `True` | Django debug mode; selects the dev branches (vite dev server, static dirs, full debug logging) |
+| `LOG_LEVEL` | `ERROR` | console log level for production; ignored while `DEBUG` is on — everything logs at DEBUG level then |
+| `FRONTEND_URL` | `http://localhost:5173` | origin of the frontend dev server; feeds CORS, CSRF trust and CSP |
+| `CSP_EXTRA_HOST` | `''` | extra host allowed by the CSP directives for deployment-specific cases |
+| `CSRF_TRUSTED_ORIGINS` | `[FRONTEND_URL]` | origins trusted for CSRF |
+| `CONFIG_FILE` | `/dev/null` | path of the INI config file read by `ConfigLoader` |
+
+Project-specific overrides of injected values belong below the injection
+loop in the project's settings.
+
+## Configuration
+
+`ConfigLoader` is the single mechanism behind every `config()` call in
+settings. A lookup like `config('DEBUG', default=True)` resolves in this
+order:
+
+1. an existing assignment in a namespace, when the call passes
+   `if_not_in_ns=globals()` — internal use by the settings injection above
+2. the environment variable of the same name
+3. the `[DEFAULT]` section of the INI file that `CONFIG_FILE` points to
+4. the `default` argument
+
+Values from env and INI arrive as strings and are cast based on the type
+of the default: booleans accept `true/1/yes/on`, lists are comma-separated
+(`ALLOWED_HOSTS=example.com,www.example.com`), ints and floats convert.
+
+### Per-environment config files
+
+Each environment can ship an INI with its non-secret values and select it
+via `CONFIG_FILE`:
+
+```ini
+; prod_django.ini — committed, baked into the image
+[DEFAULT]
+DEBUG               = False
+ALLOWED_HOSTS       = example.com,www.example.com
+FRONTEND_URL        = https://example.com
+FRONTEND_API_URL    = https://example.com/api
+LOG_LEVEL           = DEBUG
+```
+
+Secrets (database credentials, `SECRET_KEY`) and the `CONFIG_FILE` pointer
+itself stay in environment variables — for docker, an uncommitted
+`<env>.env` file loaded via `env_file`, selected by an `ENV` variable:
+
+```bash
+# prod.env — NOT committed, contains secrets
+ENV=prod
+DB_PASSWORD=...
+SECRET_KEY=...
+CONFIG_FILE=./docker/prod_django.ini
+```
+
+Environment variables always override the INI, so any value can be changed
+ad hoc without touching a file:
+
+```console
+$ DEBUG=false LOG_LEVEL=WARNING python manage.py dev
+```
+
+With neither env vars nor a config file present, the defaults apply — and
+they are chosen to run a local dev environment with zero configuration.
 
 ## Development Server
 
@@ -126,4 +218,4 @@ The socket acts as the request, completion, and exit-status channel. Workers sen
 
 ## Current Cleanup Notes
 
-- `djultra.settings` still contains project-specific assumptions such as frontend paths, Vite/static layout, `sign.relonee.com` CSP entries, and localhost dev hosts.
+- `djultra.settings` still assumes the standard project layout: `frontend/src/assets`, `static/src`, `static/frontend`, and `static/collected` under `BASE_DIR`.

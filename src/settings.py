@@ -1,11 +1,34 @@
 # Injected into the including project's settings via ultraimport
 # (inject=globals()), so it runs with that module's namespace: it expects
-# DEBUG, LOG_LEVEL, BASE_DIR, FRONTEND_URL and `config` to be defined
-# before the injection, and it wraps the project's MIDDLEWARE list with
-# djultra middleware. Project-specific overrides of anything defined here
-# belong below the injection loop in the project's settings.
+# BASE_DIR and MIDDLEWARE to be defined before the injection (MIDDLEWARE
+# gets wrapped with djultra middleware). Everything else fills gaps only:
+# a value the project already defined wins (if_not_in_ns), otherwise env
+# and config file are consulted, and the defaults aim at local dev —
+# production is the special case and overrides via env vars.
 
 import re
+
+from django.core.exceptions import ImproperlyConfigured
+
+for name in ('BASE_DIR', 'MIDDLEWARE'):
+    if name not in globals():
+        raise ImproperlyConfigured(f"djultra settings expect '{name}' to be defined in the project settings before the app-settings injection")
+
+if 'config' not in globals():
+    from djultra.utils.config_loader import ConfigLoader
+    config = ConfigLoader()
+    config.config_file = config('CONFIG_FILE', default='/dev/null')
+
+# Django debug mode; also selects the dev branches below (vite dev server,
+# static dirs) and full debug logging
+DEBUG = config('DEBUG', default=True, if_not_in_ns=globals())
+
+# Console log level for production; only effective when DEBUG is off —
+# with DEBUG on, everything logs at DEBUG level regardless
+LOG_LEVEL = config('LOG_LEVEL', default='ERROR', if_not_in_ns=globals())
+
+# Origin the frontend dev server runs on; feeds CORS, CSRF trust and CSP
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173', if_not_in_ns=globals())
 
 #############
 ## LOGGING ##
@@ -252,7 +275,7 @@ from csp.constants import SELF, NONCE, NONE, UNSAFE_INLINE, STRICT_DYNAMIC
 #    CSP_EXTRA_HOST = "http://localhost:8000"
 #else:
 #    CSP_EXTRA_HOST = ""
-CSP_EXTRA_HOST = ""
+CSP_EXTRA_HOST = config('CSP_EXTRA_HOST', default="", if_not_in_ns=globals())
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
