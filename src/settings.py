@@ -30,6 +30,9 @@ LOG_LEVEL = config('LOG_LEVEL', default='ERROR', if_not_in_ns=globals())
 # Origin the frontend dev server runs on; feeds CORS, CSRF trust and CSP
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173', if_not_in_ns=globals())
 
+# Base URL the SPA calls back to for the API; passed into the index template
+FRONTEND_API_URL = config('FRONTEND_API_URL', default='http://localhost:8000/api', if_not_in_ns=globals())
+
 #############
 ## LOGGING ##
 #############
@@ -152,6 +155,18 @@ else:
         'rest_framework.renderers.BrowsableAPIRenderer',
     )
 
+AUTHENTICATION_BACKENDS = [
+    'djultra.authentication.TokenBackend',
+    # For Django Admin
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Secret for server-side reCAPTCHA verification (used by the sign-in flow)
+RECAPTCHA_SECRET_KEY = config('RECAPTCHA_SECRET_KEY', default='', if_not_in_ns=globals())
+
+# Public site key for the reCAPTCHA widget; passed into the index template
+RECAPTCHA_SITE_KEY = config('RECAPTCHA_SITE_KEY', default='', if_not_in_ns=globals())
+
 ########################
 ## SESSIONS & SECURITY ##
 ########################
@@ -168,6 +183,22 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+###########
+## EMAIL ##
+###########
+
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='djultra.services.email.Backend', if_not_in_ns=globals())
+EMAIL_HOST = config('EMAIL_HOST', default='localhost', if_not_in_ns=globals())
+EMAIL_PORT = config('EMAIL_PORT', default=25, if_not_in_ns=globals())
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='', if_not_in_ns=globals())
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='', if_not_in_ns=globals())
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, if_not_in_ns=globals())
+
+# Also print sent emails to the console; defaults to DEBUG (Relonee did this in dev)
+EMAIL_PRINT_TO_CONSOLE = config('EMAIL_PRINT_TO_CONSOLE', default=DEBUG, if_not_in_ns=globals())
+
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='webmaster@localhost', if_not_in_ns=globals())
 
 ##################
 ## CORS HEADERS ##

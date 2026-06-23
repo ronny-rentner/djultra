@@ -57,7 +57,7 @@ class BaseManager(models.Manager):
     def get_queryset(self):
         return BaseQuerySet(self.model, using=self._db)
 
-class BaseModel(models.Model):
+class Base(models.Model):
     class Admin:
         pass
 

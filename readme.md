@@ -11,6 +11,17 @@ Adding meta options to Django models:
 
 `djultra` is a reusable Django extension layer for project scaffolding, admin automation, model helpers, DRF serializers, logging, middleware, and development commands.
 
+## Conventions
+
+djultra preserves the package structure it was extracted from: a module lives in its sub-package (`djultra/services/email.py`, `djultra/models/base.py`), never flattened to a top-level module. Call functions through their module path rather than importing the bare name — it reads better and shows where the function lives and how the code is structured:
+
+```python
+from djultra import services
+
+services.email.send_templated_email(subject=..., template_name=..., context=..., recipient_list=...)
+# not: from djultra.services.email import send_templated_email; send_templated_email(...)
+```
+
 ## Core Model Helpers
 
 - `BaseModel`: abstract model with `created_at`, `updated_at`, `get_admin_url()`, `admin_link()`, and `to_dict()`.
@@ -52,6 +63,19 @@ Adding meta options to Django models:
 - Artificial delay middleware for testing slow endpoints.
 - Dev proxy and sequence-adjustment middleware exist as experimental helpers.
 
+## Web Views & Authentication
+
+- `djultra.views`: the generic web surface every site shares — `index` (renders
+  the SPA shell template with `FRONTEND_API_URL` and `RECAPTCHA_SITE_KEY`),
+  `TokenLoginView2`, `SignOutView`, `Ping`, `SigninRequestView` (reCAPTCHA-guarded
+  sign-in request), and the `GenericAPIThrottle` rate limit.
+- `djultra.urls`: routes for those views. A project includes it from its root
+  URLconf and points its SPA catch-all at `djultra.views.index`; site-specific
+  routes stay in the project's own `urls.py`.
+- `djultra.authentication`: `TokenBackend` (sign-in token → `PersonLoginUser`) and
+  the `IsOwner` object permission. The `Person` / `PersonLoginUser` models carry
+  the passwordless token auth and the templated sign-in and invitation emails.
+
 ## Settings & Development Workflow
 
 - `djultra.settings`: Rich logging, static/media paths, Django Vite paths, CSP defaults, middleware insertion, and dev flags.
@@ -91,9 +115,16 @@ special case and overrides via environment variables or the config file.
 | `DEBUG` | `True` | Django debug mode; selects the dev branches (vite dev server, static dirs, full debug logging) |
 | `LOG_LEVEL` | `ERROR` | console log level for production; ignored while `DEBUG` is on — everything logs at DEBUG level then |
 | `FRONTEND_URL` | `http://localhost:5173` | origin of the frontend dev server; feeds CORS, CSRF trust and CSP |
+| `FRONTEND_API_URL` | `http://localhost:8000/api` | base URL the SPA calls for the API; passed into the index template |
 | `CSP_EXTRA_HOST` | `''` | extra host allowed by the CSP directives for deployment-specific cases |
 | `CSRF_TRUSTED_ORIGINS` | `[FRONTEND_URL]` | origins trusted for CSRF |
 | `CONFIG_FILE` | `/dev/null` | path of the INI config file read by `ConfigLoader` |
+| `RECAPTCHA_SECRET_KEY` | `''` | server-side reCAPTCHA secret used by the sign-in flow |
+| `RECAPTCHA_SITE_KEY` | `''` | public reCAPTCHA site key; passed into the index template |
+| `EMAIL_BACKEND` | `djultra.services.email.Backend` | SMTP backend that can also echo mail to the console |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `EMAIL_USE_TLS` | `localhost` / `25` / `''` / `''` / `False` | standard Django SMTP settings |
+| `EMAIL_PRINT_TO_CONSOLE` | `DEBUG` | also print sent mail to the console |
+| `DEFAULT_FROM_EMAIL` | `webmaster@localhost` | default From address for outgoing mail |
 
 Project-specific overrides of injected values belong below the injection
 loop in the project's settings.
