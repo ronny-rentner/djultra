@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from .models import Person
+from .models import Person, ContactMessageSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +112,41 @@ class SigninRequestView(APIView):
 
         person.send_signin_email(request)
         return Response({"detail": "Signin message has been sent!"}, status=status.HTTP_201_CREATED)
+
+
+class ContactMessageView(APIView):
+    throttle_classes = [GenericAPIThrottle]
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        logger.debug('Contact form posted')
+        # Verify reCAPTCHA
+        recaptcha_response = request.data.get('recaptcha', None)
+        if not recaptcha_response:
+            return Response({"error": "reCAPTCHA token is missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        recaptcha_verify_url = 'https://www.google.com/recaptcha/api/siteverify'
+        recaptcha_data = {
+            'secret': settings.RECAPTCHA_SECRET_KEY,
+            'response': recaptcha_response
+        }
+        logger.debug(f'Recaptcha check, got {len(recaptcha_response)} bytes')
+        recaptcha_response = requests.post(recaptcha_verify_url, data=recaptcha_data)
+        recaptcha_result = recaptcha_response.json()
+
+        if not recaptcha_result.get('success'):
+            logger.error('Recaptcha error: ', recaptcha_result)
+            return Response({"error": "Could not verify. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.debug('Re-captcha verified')
+
+        # Serialize and save the message
+        serializer = ContactMessageSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            logger.debug('Contact form saved')
+            return Response({"detail": "Your message has been sent!"}, status=status.HTTP_201_CREATED)
+
+        #TODO: What's the error key here? Has to be 'error': ...
+        #return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

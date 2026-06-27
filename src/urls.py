@@ -8,4 +8,5 @@ urlpatterns = [
     path("api/ping/", views.Ping.as_view(), name="api_ping"),
     path("api/signout/", views.SignOutView.as_view(), name="api_sign_out"),
     path("api/signin-request/", views.SigninRequestView.as_view(), name="api_signin_request"),
+    path("api/contact/", views.ContactMessageView.as_view(), name="api_contact"),
 ]

@@ -161,11 +161,14 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# Secret for server-side reCAPTCHA verification (used by the sign-in flow)
-RECAPTCHA_SECRET_KEY = config('RECAPTCHA_SECRET_KEY', default='', if_not_in_ns=globals())
+# reCAPTCHA keys default to Google's universal test keys, which always validate
+# (the widget shows a "for testing only" banner) so the forms work out of the
+# box. Override with real keys via env / CONFIG_FILE in production.
+# Secret for server-side reCAPTCHA verification (sign-in + contact flows)
+RECAPTCHA_SECRET_KEY = config('RECAPTCHA_SECRET_KEY', default='6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe', if_not_in_ns=globals())
 
 # Public site key for the reCAPTCHA widget; passed into the index template
-RECAPTCHA_SITE_KEY = config('RECAPTCHA_SITE_KEY', default='', if_not_in_ns=globals())
+RECAPTCHA_SITE_KEY = config('RECAPTCHA_SITE_KEY', default='6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', if_not_in_ns=globals())
 
 ########################
 ## SESSIONS & SECURITY ##
@@ -204,10 +207,42 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='webmaster@localhost',
 ## CORS HEADERS ##
 ##################
 
-# Alternatively, specify allowed origins
-CORS_ALLOWED_ORIGINS = []
+# CORS_ALLOWED_ORIGINS — the browser origins (scheme://host:port) allowed to call
+# this backend's API from JavaScript. It matters ONLY when the page making the
+# request is served from a DIFFERENT origin than the API; same-origin requests skip
+# CORS entirely.
+#
+# Why both localhost AND 127.0.0.1 below: browsers treat them as different origins
+# even though they're the same machine. So opening the app at http://127.0.0.1:8000
+# while the API URL names http://localhost:8000 (or vice versa) is a cross-origin
+# call, and the page's origin has to be listed.
+#
+# To reach the dev server over the LAN (it binds 0.0.0.0, so it answers on every
+# interface), add the exact origin you open in the browser — for example:
+#
+#     CORS_ALLOWED_ORIGINS += [
+#         'http://192.168.1.50:8000',     # this machine's LAN IP
+#         'http://mybox.fritz.box:8000',  # this machine's LAN hostname
+#     ]
+#
+# Rules of thumb:
+#   * Entries are EXACT strings — scheme, host and port must all match what's in
+#     the address bar. No wildcards here (that's CORS_ALLOWED_ORIGIN_REGEXES).
+#   * Add the same host to ALLOWED_HOSTS too, or Django rejects it with
+#     DisallowedHost before CORS even runs.
+#   * Prefer setting these per-environment via env / CONFIG_FILE. In PRODUCTION,
+#     list only the real site origin(s) — the loopback entries below are dev-only.
+CORS_ALLOWED_ORIGINS = [FRONTEND_URL]
 
-CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+if DEBUG:
+    # Loopback origins for the Django-served SPA during local dev. Browsers treat
+    # `localhost` and `127.0.0.1` as different origins, so both are listed. Kept
+    # out of production: a credentialed CORS grant to localhost is needless
+    # attack surface where the app is served from a real domain.
+    CORS_ALLOWED_ORIGINS += [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+    ]
 
 # Allow specific HTTP methods
 CORS_ALLOW_METHODS = [
@@ -366,6 +401,17 @@ CONTENT_SECURITY_POLICY = {
         "base-uri": [ SELF, ],
     },
 }
+
+# Dev only: the SPA may be opened at a loopback host (e.g. http://127.0.0.1:8000)
+# while the API URL names the other (http://localhost:8000) — a cross-origin
+# connection that 'self' doesn't cover. Add the same loopback origins as
+# CORS_ALLOWED_ORIGINS so the page is allowed to reach the API. In production the
+# page and API share the real origin, covered by 'self'.
+if DEBUG:
+    CONTENT_SECURITY_POLICY["DIRECTIVES"]["connect-src"] += [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
 
 
