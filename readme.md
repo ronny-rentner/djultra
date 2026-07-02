@@ -63,18 +63,13 @@ services.email.send_templated_email(subject=..., template_name=..., context=...,
 - Artificial delay middleware for testing slow endpoints.
 - Dev proxy and sequence-adjustment middleware exist as experimental helpers.
 
-## Web Views & Authentication
+## Frontend Shell
 
-- `djultra.views`: the generic web surface every site shares — `index` (renders
-  the SPA shell template with `FRONTEND_API_URL` and `RECAPTCHA_SITE_KEY`),
-  `TokenLoginView2`, `SignOutView`, `Ping`, `SigninRequestView` (reCAPTCHA-guarded
-  sign-in request), and the `GenericAPIThrottle` rate limit.
-- `djultra.urls`: routes for those views. A project includes it from its root
-  URLconf and points its SPA catch-all at `djultra.views.index`; site-specific
-  routes stay in the project's own `urls.py`.
-- `djultra.authentication`: `TokenBackend` (sign-in token → `PersonLoginUser`) and
-  the `IsOwner` object permission. The `Person` / `PersonLoginUser` models carry
-  the passwordless token auth and the templated sign-in and invitation emails.
+- `djultra.views.index`: renders the SPA shell, exposing djultra's frontend config to
+  the page — `apiBaseUrl` (`FRONTEND_API_URL`), `recaptchaKey` (`RECAPTCHA_SITE_KEY`),
+  and the CSP `nonce`. Point a project's SPA catch-all route at it.
+- `templates/index.html`: the default shell `index` renders; a site overrides it by
+  shipping its own `index.html` in an app searched before djultra.
 
 ## Settings & Development Workflow
 

@@ -1,0 +1,24 @@
+{% load django_vite %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {% vite_hmr_client %}
+    {% vite_asset 'src/main.js' %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>djultra</title>
+    <script nonce="{{ request.csp_nonce }}">
+      // Frontend config pushed from Django
+      window.config = {
+        apiBaseUrl: '{{ frontend_api_url }}',
+        baseUrl: '',
+        nonce: '{{ request.csp_nonce }}',
+        recaptchaKey: '{{ recaptcha_site_key }}',
+      };
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

@@ -155,12 +155,6 @@ else:
         'rest_framework.renderers.BrowsableAPIRenderer',
     )
 
-AUTHENTICATION_BACKENDS = [
-    'djultra.authentication.TokenBackend',
-    # For Django Admin
-    'django.contrib.auth.backends.ModelBackend',
-]
-
 # reCAPTCHA keys default to Google's universal test keys, which always validate
 # (the widget shows a "for testing only" banner) so the forms work out of the
 # box. Override with real keys via env / CONFIG_FILE in production.
