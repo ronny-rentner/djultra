@@ -33,6 +33,10 @@ FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173', if_not_in
 # Base URL the SPA calls back to for the API; passed into the index template
 FRONTEND_API_URL = config('FRONTEND_API_URL', default='http://localhost:8000/api', if_not_in_ns=globals())
 
+# It's industry best practice to use UTC timestamps everywhere and only calculate
+# local times for display
+TIME_ZONE = config('TIME_ZONE', default='UTC', if_not_in_ns=globals())
+
 #############
 ## LOGGING ##
 #############
@@ -94,7 +98,7 @@ LOGGING = {
             "rich_tracebacks": True,
             "tracebacks_show_locals": False,
             # Has to be a part of a directory or path name
-            "tracebacks_suppress": ['venv', '/usr/lib'],
+            "tracebacks_suppress": ['backend/venv', '/usr/lib'],
             #"tracebacks_width": 100,
             "markup": False,
         }

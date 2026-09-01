@@ -10,6 +10,7 @@ from rich.logging import RichHandler
 from rich.pretty import pretty_repr
 from rich.table import Table
 from rich.text import Text
+from rich.traceback import install as install_rich_traceback
 
 from .middleware import RequestIDMiddleware
 
@@ -61,6 +62,14 @@ class CustomRichHandler(RichHandler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Make exceptions raised outside the logging paths print with the same
+        # traceback options as logged ones.
+        install_rich_traceback(
+            show_locals=self.tracebacks_show_locals,
+            suppress=self.tracebacks_suppress,
+            extra_lines=self.tracebacks_extra_lines,
+            width=self.tracebacks_width,
+        )
         #self.console = Console()
         self.width = self.get_terminal_width()
         self.console = Console(file=sys.stdout, force_terminal=True, width=self.width)
