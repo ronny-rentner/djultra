@@ -19,7 +19,6 @@ dependencies= [
     'django-csp',
     'django-tasks',
     'django-tasks-db',
-    'pywatchman',
     'requests',
     'rich',
     'setproctitle',

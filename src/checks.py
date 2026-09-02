@@ -1,5 +1,7 @@
+import importlib.util
 import logging
 import os
+import shutil
 import sys
 
 from django.core import checks
@@ -50,21 +52,18 @@ def check_statreloader_usage(app_configs, **kwargs):
     reloader = get_reloader()
     reloader_cls = reloader if isinstance(reloader, type) else reloader.__class__
 
-    if reloader_cls.__name__ != "WatchmanReloader":
+    if reloader_cls.__name__ == "WatchmanReloader":
+        return []
 
-        availability = False
+    # WatchmanReloader needs both halves: the watchman daemon and its Python client
+    if not shutil.which("watchman"):
+        hint = "Install the watchman daemon for a faster, inotify-based file system watcher"
+    elif not importlib.util.find_spec("pywatchman"):
+        hint = "The watchman daemon is installed; `pip install pywatchman` to let Django talk to it"
+    else:
+        hint = "watchman and pywatchman are both installed, but Django did not select WatchmanReloader"
 
-        try:
-            from django.utils.autoreload import WatchmanReloader
-            availability = WatchmanReloader.check_availability()
-            
-        except Exception as e:
-            logger.error('Cannot use Watchman reloader: ', e)
-
-    if not reloader_cls or reloader_cls.__name__ == "StatReloader":
-        return [
-            checks.Warning("Django is about to use StatReloader, which polls the filesystem with `os.stat()` and is considerably slower than native watchers.",
-                hint="Install watchman for a faster, inotify-based file system watcher")
-        ]
-
-    return []
+    return [
+        checks.Warning("Django is about to use StatReloader, which polls the filesystem with `os.stat()` and is considerably slower than native watchers.",
+            hint=hint)
+    ]

@@ -1,4 +1,7 @@
+import importlib.util
 import os
+import shutil
+import subprocess
 import sys
 import signal
 import logging
@@ -35,6 +38,17 @@ class Command(RunserverCommand):
         except Exception:
             logger.warning(f"Could not waitpid for {name} (pid={pid})")
 
+    def _install_pywatchman(self):
+        """Give Django the client for the watchman daemon it is about to look for."""
+        if importlib.util.find_spec("pywatchman") or not shutil.which("watchman"):
+            return
+        logger.info("Installing pywatchman so the reloader can use the watchman daemon")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "pywatchman"])
+        except subprocess.CalledProcessError as e:
+            # A missing client only costs reload speed, so keep the server starting
+            logger.warning(f"Could not install pywatchman: {e}")
+
     def _run_worker(self):
         """Launch the django-tasks db_worker"""
         worker = Worker(
@@ -61,6 +75,7 @@ class Command(RunserverCommand):
         is_main = os.environ.get(DJANGO_AUTORELOAD_ENV) == "true"
 
         if use_reloader and not is_main:
+            self._install_pywatchman()
             super().handle(*args, **options)
             return
 
