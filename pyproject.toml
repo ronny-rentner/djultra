@@ -32,6 +32,8 @@ packages = [
     "djultra.management",
     "djultra.management.commands",
     "djultra.migrations",
+    "djultra.models",
+    "djultra.services",
     "djultra.utils",
 ]
 
