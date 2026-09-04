@@ -277,13 +277,15 @@ CORS_ALLOW_CREDENTIALS = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-DJANGO_VITE_DEV_MODE = DEBUG
+# Serve the frontend from the Vite dev server rather than the built bundle; follows
+# DEBUG unless set, so a live site can turn DEBUG on and keep serving its build
+DJANGO_VITE_DEV_MODE = config('DJANGO_VITE_DEV_MODE', default=DEBUG, if_not_in_ns=globals())
 
 STATIC_URL = '/static/'
 
 STATIC_ROOT = BASE_DIR / 'static/collected'
 
-if DEBUG:
+if DJANGO_VITE_DEV_MODE:
 
     STATICFILES_DIRS = (
         BASE_DIR / 'static/src',
