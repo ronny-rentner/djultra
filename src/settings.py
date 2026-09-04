@@ -183,6 +183,9 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=[FRONTEND_URL])
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
+# Proxies that terminate SSL use this extra header to inform us about the protocol
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ###########
