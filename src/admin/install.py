@@ -32,10 +32,12 @@ def make_action(model, method_name, description):
     return action
 
 def install():
+    # INSTALLED_ULTRA_APPS holds module paths, so index the configs by name, not by label
+    app_configs = {app_config.name: app_config for app_config in apps.get_app_configs()}
+
     for app_name in getattr(settings, 'INSTALLED_ULTRA_APPS', []):
         logger.debug('Finding models for generating admin: app=%s', app_name)
-        # INSTALLED_ULTRA_APPS holds module paths, so match the config's name, not its label
-        app_config = next((c for c in apps.get_app_configs() if c.name == app_name), None)
+        app_config = app_configs.get(app_name)
         if app_config is None:
             logger.warning("AppConfig not found for '%s', skipping.", app_name)
             continue
