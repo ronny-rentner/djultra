@@ -189,9 +189,10 @@ class BaseModelAdmin(admin.ModelAdmin):
     def get_actions(self, request):
         actions = super().get_actions(request)
 
-        def get_action_description(action_tuple):
+        def get_action_description(action):
             """ Helper function to get action description """
-            return action_tuple[2] if len(action_tuple) > 2 else action_tuple[0].__name__
+            # Django 6.1 returns Action objects; earlier versions (func, name, description) tuples
+            return action.description if hasattr(action, 'description') else action[2]
 
         # Sort actions by their description
         sorted_actions = sorted(actions.items(), key=lambda item: get_action_description(item[1]))
