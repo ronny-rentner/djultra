@@ -62,11 +62,13 @@ def install():
                 attrs
             )
 
+            # Own list per class: appending to the inherited one would share it across all models
+            actions = list(AdminClass.actions)
             for attr_name, attr_value in vars(model).items():
                 if getattr(attr_value, '_admin_action', False):
                     description = getattr(attr_value, '_admin_action_description', attr_name.replace('_', ' ').capitalize())
-                    action_func = make_action(model, attr_name, description)
-                    AdminClass.actions.append(action_func)
+                    actions.append(make_action(model, attr_name, description))
+            AdminClass.actions = actions
 
             admin.site.register(model, AdminClass)
             logger.info("Registered admin for model '%s.%s' with actions: %s.", app_config.label, model.__name__, attrs.get('actions', []))
