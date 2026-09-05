@@ -418,6 +418,27 @@ if DEBUG:
 
 
 
+#########
+# CACHE #
+#########
+
+CACHE = config('CACHE', default=True, if_not_in_ns=globals())
+
+if CACHE:
+    CACHES = {
+        'default': {
+            'BACKEND':  'djultra.services.cache.UltraDictCache',
+            # cache name in /dev/shm
+            'LOCATION': f'{PROJECT_NAME}DjangoCache{"DEBUG" if DEBUG else ""}',
+            'SIZE': '',
+            # Options are ignored right now by the cache backend
+            'OPTIONS': {
+                'TIMEOUT': 300,  # default timeout for cache entries
+                'MAX_ENTRIES': 1000,  # optional, max entries
+            },
+        }
+    }
+
 ##############
 ## DEV MODE ##
 ##############
