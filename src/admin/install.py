@@ -32,12 +32,12 @@ def make_action(model, method_name, description):
     return action
 
 def install():
-    for app_label in getattr(settings, 'INSTALLED_ULTRA_APPS', []):
-        logger.debug('Finding models for generating admin: app=%s', app_label)
-        try:
-            app_config = apps.get_app_config(app_label)
-        except LookupError:
-            logger.warning("AppConfig not found for '%s', skipping.", app_label)
+    for app_name in getattr(settings, 'INSTALLED_ULTRA_APPS', []):
+        logger.debug('Finding models for generating admin: app=%s', app_name)
+        # INSTALLED_ULTRA_APPS holds module paths, so match the config's name, not its label
+        app_config = next((c for c in apps.get_app_configs() if c.name == app_name), None)
+        if app_config is None:
+            logger.warning("AppConfig not found for '%s', skipping.", app_name)
             continue
 
         for model in app_config.get_models():
@@ -67,7 +67,7 @@ def install():
                     AdminClass.actions.append(action_func)
 
             admin.site.register(model, AdminClass)
-            logger.info("Registered admin for model '%s.%s' with actions: %s.", app_label, model.__name__, attrs.get('actions', []))
+            logger.info("Registered admin for model '%s.%s' with actions: %s.", app_config.label, model.__name__, attrs.get('actions', []))
 
 
 install()
