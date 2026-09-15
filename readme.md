@@ -68,8 +68,14 @@ services.email.send_templated_email(subject=..., template_name=..., context=...,
 - `djultra.views.index`: renders the SPA shell, exposing djultra's frontend config to
   the page — `apiBaseUrl` (`FRONTEND_API_URL`), `recaptchaKey` (`RECAPTCHA_SITE_KEY`),
   and the CSP `nonce`. Point a project's SPA catch-all route at it.
-- `templates/index.html`: the default shell `index` renders; a site overrides it by
-  shipping its own `index.html` in an app searched before djultra.
+- `FRONTEND_CONFIG`: a dict of a site's own `window.config` keys, default `{}`. The view
+  serialises the values to JS literals, and the template writes them next to djultra's
+  keys, so `FRONTEND_CONFIG = {'userLoginEnabled': USER_LOGIN_ENABLED}` reaches the page
+  as `window.config.userLoginEnabled`.
+- `templates/index.html`: the shell `index` renders. Its `<title>` is `PROJECT_NAME`, the
+  favicon is the site's `src/assets/favicon.svg`, and a script sets `data-theme` before
+  the app renders. A site overrides it by shipping its own `index.html` in an app searched
+  before djultra.
 
 ## Settings & Development Workflow
 

@@ -168,6 +168,9 @@ RECAPTCHA_SECRET_KEY = config('RECAPTCHA_SECRET_KEY', default='6LeIxAcTAAAAAGG-v
 # Public site key for the reCAPTCHA widget; passed into the index template
 RECAPTCHA_SITE_KEY = config('RECAPTCHA_SITE_KEY', default='6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', if_not_in_ns=globals())
 
+# A site's own keys for window.config, written into the index template next to djultra's
+FRONTEND_CONFIG = config('FRONTEND_CONFIG', default={}, if_not_in_ns=globals())
+
 ########################
 ## SESSIONS & SECURITY ##
 ########################

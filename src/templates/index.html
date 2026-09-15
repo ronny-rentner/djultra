@@ -7,16 +7,43 @@
     {% vite_asset 'src/main.js' %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>djultra</title>
+    <title>{{ project_name }}</title>
+    <style nonce="{{ request.csp_nonce }}">
+      /* The page background before the app's CSS arrives, so the first paint has no flash */
+      :root[data-theme="dark"] body {
+        background-color: #13171f;
+      }
+      :root[data-theme="light"] body {
+        background-color: hsl(24 33% 97%/1);
+      }
+    </style>
     <script nonce="{{ request.csp_nonce }}">
+      // Set the theme before the app renders: the user's choice from the config store,
+      // else the system preference
+      const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+      let savedTheme;
+      try {
+        const config = JSON.parse(localStorage.getItem('config'));
+        savedTheme = config?.darkMode ? 'dark' : 'light';
+      } catch (error) {
+      }
+
+      if (savedTheme === 'dark' || (!savedTheme && prefersDarkScheme.matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+
       // Frontend config pushed from Django
       window.config = {
         apiBaseUrl: '{{ frontend_api_url }}',
         baseUrl: '',
         nonce: '{{ request.csp_nonce }}',
-        recaptchaKey: '{{ recaptcha_site_key }}',
+        recaptchaKey: '{{ recaptcha_site_key }}',{% for key, value in frontend_config.items %}
+        {{ key }}: {{ value|safe }},{% endfor %}
       };
     </script>
+    <link rel="icon" href="{% vite_asset_url 'src/assets/favicon.svg' %}" type="image/svg+xml">
   </head>
   <body>
     <div id="app"></div>
