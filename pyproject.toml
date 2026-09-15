@@ -42,7 +42,7 @@ packages = [
 djultra = "src" 
 
 [tool.setuptools.package-data]
-djultra = ["templates/admin/*.html"]
+djultra = ["templates/*.html", "templates/admin/*.html"]
 
 #[tool.setuptools]
 #script-files = ["smartactivate", "get-project-name.sh"]
