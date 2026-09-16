@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 
-from .management.commands import fastmanage_daemon
+from .management.commands import dev, fastmanage_daemon
 from .middleware import PatchMorselMiddleware
 
 
@@ -58,6 +58,18 @@ def fd_ancillary(*fds):
             array.array("i", fds).tobytes(),
         )
     ]
+
+
+class DevCommandTests(TestCase):
+    def test_worker_starts_with_default_queue(self):
+        # Keep the constructor real to catch dependency API changes; only replace
+        # the polling loop, which would consume queued tasks and never return.
+        with mock.patch.object(dev.Worker, "run", autospec=True) as run:
+            dev.Command()._run_worker()
+
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0].queue_names, ["default"])
+        self.assertEqual(run.call_args.args[0].excluded_queue_names, [])
 
 
 class FastmanageDaemonFunctionTests(TestCase):

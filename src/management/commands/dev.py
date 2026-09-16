@@ -59,6 +59,8 @@ class Command(RunserverCommand):
             startup_delay=True,
             max_tasks=None,
             worker_id="default",
+            # Keep every task on the selected default queue eligible.
+            excluded_queue_names=[],
         )
         worker.run()
 
