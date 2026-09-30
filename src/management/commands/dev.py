@@ -9,6 +9,7 @@ import logging
 from django.core.management.commands.runserver import Command as RunserverCommand
 from django.db import connections
 from django.conf import settings
+from django.utils import autoreload
 from django.utils.autoreload import DJANGO_AUTORELOAD_ENV
 
 from django_tasks_db.management.commands.db_worker import Worker
@@ -18,6 +19,13 @@ import setproctitle
 from . import fastmanage_daemon
 
 logger = logging.getLogger(__name__)
+
+class WatchmanReloader(autoreload.WatchmanReloader):
+    def _subscribe(self, directory, name, expression):
+        # Watchman retains old subscribers when a name is reused on one connection.
+        # Cancel against Django's resolved root before constructing the replacement.
+        self.client.query("unsubscribe", self._watch_root(directory)[0], name)
+        super()._subscribe(directory, name, expression)
 
 class Command(RunserverCommand):
     help = "Run Django's devserver and fork child to run db_worker and fastmanage daemon."
@@ -80,6 +88,10 @@ class Command(RunserverCommand):
             self._install_pywatchman()
             super().handle(*args, **options)
             return
+
+        if use_reloader:
+            # Django selects its reloader inside handle(), after this dev-process setup.
+            autoreload.WatchmanReloader = WatchmanReloader
 
         self.child_pids = {}
 

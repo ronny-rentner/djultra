@@ -10,6 +10,7 @@ from unittest import TestCase, mock
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
+from django.utils import autoreload
 
 from .management.commands import dev, fastmanage_daemon
 from .middleware import PatchMorselMiddleware
@@ -61,6 +62,39 @@ def fd_ancillary(*fds):
 
 
 class DevCommandTests(TestCase):
+    def test_watchman_refresh_cancels_previous_subscription(self):
+        # Refresh the same directory with an expanded module list; each replacement
+        # must cancel its old subscriber while keeping Django's query construction.
+        reloader = dev.WatchmanReloader()
+        reloader.client = mock.Mock()
+        directory = Path("/project/backend")
+        name = "files:/project/backend"
+        with mock.patch.object(reloader, "_watch_root", return_value=("/project", "backend")):
+            with mock.patch.object(reloader, "_get_clock", return_value="c:1:1:1:1"):
+                reloader._subscribe(directory, name, ["name", ["models.py"]])
+                reloader._subscribe(directory, name, ["name", ["models.py", "views.py"]])
+
+        self.assertEqual(
+            [call.args[0] for call in reloader.client.query.call_args_list],
+            ["unsubscribe", "subscribe", "unsubscribe", "subscribe"],
+        )
+        self.assertEqual(reloader.client.query.call_args_list[2].args, ("unsubscribe", "/project", name))
+        query = reloader.client.query.call_args_list[3].args[3]
+        self.assertEqual(query["relative_root"], "backend")
+        self.assertEqual(query["since"], "c:1:1:1:1")
+        self.assertIn(["name", ["models.py", "views.py"]], query["expression"])
+
+    def test_dev_activates_watchman_subscription_workaround(self):
+        # Stop before runserver starts threads; inspect the reloader selected by dev.
+        with override_settings(**{dev.fastmanage_daemon.CONF_ENABLE: False, "DJU_DEV_DB_WORKER_ENABLE": False}):
+            with mock.patch.dict(dev.os.environ, {autoreload.DJANGO_AUTORELOAD_ENV: "true"}):
+                with mock.patch.object(autoreload, "WatchmanReloader"):
+                    with mock.patch.object(dev.RunserverCommand, "handle") as runserver:
+                        with mock.patch.object(dev.setproctitle, "setproctitle"):
+                            dev.Command().handle(use_reloader=True)
+                        self.assertIs(autoreload.WatchmanReloader, dev.WatchmanReloader)
+                        runserver.assert_called_once_with(use_reloader=True)
+
     def test_worker_starts_with_default_queue(self):
         # Keep the constructor real to catch dependency API changes; only replace
         # the polling loop, which would consume queued tasks and never return.

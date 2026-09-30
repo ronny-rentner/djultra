@@ -203,6 +203,9 @@ It keeps Django’s familiar local development server behavior: foreground proce
 - reload-aware helper processes that are recreated with the active dev server
 - shutdown handling for the helper processes when the dev server exits
 
+When Django selects Watchman, `dev` cancels each named subscription before refreshing it.
+This prevents previous subscribers from accumulating on the persistent connection.
+
 This gives one Django entry point for the local backend stack: web server, task worker, and fastmanage.
 
 The processes are intentionally named:
