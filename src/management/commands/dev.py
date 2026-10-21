@@ -73,6 +73,11 @@ class Command(RunserverCommand):
         worker.run()
 
     def handle(self, *args, **options):
+        if options.get("addrport"):
+            settings.BACKEND_BIND_ADDRESS = options["addrport"]
+        else:
+            options["addrport"] = getattr(settings, "BACKEND_BIND_ADDRESS", None)
+
         if "DJANGO_RUNSERVER_HIDE_WARNING" not in os.environ:
             os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
 

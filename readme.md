@@ -77,6 +77,14 @@ services.email.send_templated_email(subject=..., template_name=..., context=...,
   the app renders. A site overrides it by shipping its own `index.html` in an app searched
   before djultra.
 
+## Management commands
+
+djultra includes some custom management commands which you'll likely need during development and operation of a Django site:
+
+- `dev`: starts the development server, task worker and fastmanage daemon.
+- `dump_db`: exports the configured PostgreSQL database to an SQL file.
+- `fix_db_collation`: fixes PostgreSQL's “database has a collation version mismatch” warning by rebuilding indexes and refreshing the recorded version.
+
 ## Settings & Development Workflow
 
 - `djultra.settings`: Rich logging, static/media paths, Django Vite paths, CSP defaults, middleware insertion, and dev flags.

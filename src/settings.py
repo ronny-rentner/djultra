@@ -7,6 +7,7 @@
 # production is the special case and overrides via env vars.
 
 import re
+from urllib import parse
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -292,6 +293,10 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static/collected'
 
 if DJANGO_VITE_DEV_MODE:
+
+    # None would produce an invalid asset URL; omit the setting to retain django-vite’s default.
+    if (frontend_port := parse.urlsplit(FRONTEND_URL).port) is not None:
+        DJANGO_VITE_DEV_SERVER_PORT = frontend_port
 
     STATICFILES_DIRS = (
         BASE_DIR / 'static/src',
