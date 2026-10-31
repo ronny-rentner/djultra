@@ -24,7 +24,10 @@
       let savedTheme;
       try {
         const config = JSON.parse(localStorage.getItem('config'));
-        savedTheme = config?.darkMode ? 'dark' : 'light';
+        // Without a saved darkMode the user has made no choice, and the system preference applies
+        if (typeof config?.darkMode === 'boolean') {
+          savedTheme = config.darkMode ? 'dark' : 'light';
+        }
       } catch (error) {
       }
 
