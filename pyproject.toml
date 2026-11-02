@@ -19,6 +19,7 @@ dependencies= [
     'django-csp',
     'django-tasks',
     'django-tasks-db',
+    'django-watchfiles',
     'requests',
     'rich',
     'setproctitle',

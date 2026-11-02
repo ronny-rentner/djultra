@@ -58,6 +58,10 @@ LOGGING = {
         'django.utils.autoreload': {
             'level': 'INFO',
         },
+        # The dev server's file watcher logs every filtered file event at DEBUG
+        'watchfiles': {
+            'level': 'INFO',
+        },
         'django.db.backends': {
             'level': 'INFO',
             #'level': 'DEBUG',

@@ -1,8 +1,4 @@
-import importlib.util
 import os
-import shutil
-import subprocess
-import sys
 import signal
 import logging
 
@@ -19,13 +15,6 @@ import setproctitle
 from . import fastmanage_daemon
 
 logger = logging.getLogger(__name__)
-
-class WatchmanReloader(autoreload.WatchmanReloader):
-    def _subscribe(self, directory, name, expression):
-        # Watchman retains old subscribers when a name is reused on one connection.
-        # Cancel against Django's resolved root before constructing the replacement.
-        self.client.query("unsubscribe", self._watch_root(directory)[0], name)
-        super()._subscribe(directory, name, expression)
 
 class Command(RunserverCommand):
     help = "Run Django's devserver and fork child to run db_worker and fastmanage daemon."
@@ -45,17 +34,6 @@ class Command(RunserverCommand):
             logger.info(f"{name} (pid={pid}) exited")
         except Exception:
             logger.warning(f"Could not waitpid for {name} (pid={pid})")
-
-    def _install_pywatchman(self):
-        """Give Django the client for the watchman daemon it is about to look for."""
-        if importlib.util.find_spec("pywatchman") or not shutil.which("watchman"):
-            return
-        logger.info("Installing pywatchman so the reloader can use the watchman daemon")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "pywatchman"])
-        except subprocess.CalledProcessError as e:
-            # A missing client only costs reload speed, so keep the server starting
-            logger.warning(f"Could not install pywatchman: {e}")
 
     def _run_worker(self):
         """Launch the django-tasks db_worker"""
@@ -90,13 +68,14 @@ class Command(RunserverCommand):
         is_main = os.environ.get(DJANGO_AUTORELOAD_ENV) == "true"
 
         if use_reloader and not is_main:
-            self._install_pywatchman()
             super().handle(*args, **options)
             return
 
         if use_reloader:
-            # Django selects its reloader inside handle(), after this dev-process setup.
-            autoreload.WatchmanReloader = WatchmanReloader
+            # Django selects its reloader inside handle(), after this dev-process setup. Watchfiles watches through
+            # inotify inside this process, so no file watcher outlives the dev server
+            from django_watchfiles import WatchfilesReloader
+            autoreload.get_reloader = WatchfilesReloader
 
         self.child_pids = {}
 

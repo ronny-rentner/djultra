@@ -1,11 +1,9 @@
-import importlib.util
 import logging
 import os
-import shutil
 import sys
 
 from django.core import checks
-from django.utils.autoreload import DJANGO_AUTORELOAD_ENV, get_reloader
+from django.utils import autoreload
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -46,24 +44,14 @@ def check_statreloader_usage(app_configs, **kwargs):
     """
     Warn when Django is about to use the slow StatReloader.
     """
-    if os.environ.get(DJANGO_AUTORELOAD_ENV) != "true":
+    if os.environ.get(autoreload.DJANGO_AUTORELOAD_ENV) != "true":
         return []
 
-    reloader = get_reloader()
-    reloader_cls = reloader if isinstance(reloader, type) else reloader.__class__
-
-    if reloader_cls.__name__ == "WatchmanReloader":
+    # Looked up on the module, so the reloader djultra's dev command puts in place counts
+    if not isinstance(autoreload.get_reloader(), autoreload.StatReloader):
         return []
-
-    # WatchmanReloader needs both halves: the watchman daemon and its Python client
-    if not shutil.which("watchman"):
-        hint = "Install the watchman daemon for a faster, inotify-based file system watcher"
-    elif not importlib.util.find_spec("pywatchman"):
-        hint = "The watchman daemon is installed; `pip install pywatchman` to let Django talk to it"
-    else:
-        hint = "watchman and pywatchman are both installed, but Django did not select WatchmanReloader"
 
     return [
         checks.Warning("Django is about to use StatReloader, which polls the filesystem with `os.stat()` and is considerably slower than native watchers.",
-            hint=hint)
+            hint="Run the dev server with `manage.py dev`, which watches files through inotify with django-watchfiles")
     ]

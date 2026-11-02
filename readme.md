@@ -211,8 +211,8 @@ It keeps Django’s familiar local development server behavior: foreground proce
 - reload-aware helper processes that are recreated with the active dev server
 - shutdown handling for the helper processes when the dev server exits
 
-When Django selects Watchman, `dev` cancels each named subscription before refreshing it.
-This prevents previous subscribers from accumulating on the persistent connection.
+Autoreload watches files with django-watchfiles: inotify inside the dev server's own process, so no file watcher
+outlives the dev server.
 
 This gives one Django entry point for the local backend stack: web server, task worker, and fastmanage.
 
