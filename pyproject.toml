@@ -19,12 +19,15 @@ dependencies= [
     'django-csp',
     'django-tasks',
     'django-tasks-db',
-    'django-watchfiles',
     'requests',
     'rich',
     'setproctitle',
     'UltraDict',
 ]
+
+[project.optional-dependencies]
+# The dev server's file watcher; production runs no dev server
+dev = ['django-watchfiles']
 
 [tool.setuptools]
 include-package-data = false
